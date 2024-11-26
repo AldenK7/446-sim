@@ -1,59 +1,59 @@
-import random
+from numpy import random
 import math
 import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import shift
 
 random.seed(10)
 
-pop_size = 10
-resource_size = 3
+# Map creation ----------------------------------------------------------------
+nest_location = (0, 0)
+grid_shape = (10, 10)
 
-lambda_a = 10
+# Parameters for map
+resource_frequency = 0.2
+volume_mean = 10
+volume_sd = 3
 
-class Resource:
-    def __init__(self, loc, fullness):
-        self.loc = loc
-        self.fullness = fullness
+class ResourcePoint:
+    def __init__(self, x, y, volume):
+        self.x = x
+        self.y = y
+        self.volume = volume
+    
+    def __str__(self):
+        string = "({}, {}) - {}".format(self.x, self.y, self.volume)
+        return string
+    
+class SeaMap:
+    def __init__(self, shape, frequency, volume_mean, volume_sd, nest):
+        self.shape = shape
+        self.frequency = frequency 
+        self.volume_mean = volume_mean
+        self.volume_sd = volume_sd
+        self.nest = nest
 
-class Arrival:
-    def __init__(self, loc, time):
-        self.loc = loc
-        self.time = time
+        self.map = np.zeros(shape)
+        self.resource_points = []
+
+    def gen_map(self):        
+        # Determine interest point locations and volumes
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
+                if random.uniform(0, 1) < self.frequency and (i, j) != self.nest:
+                    volume = max(0, random.normal(loc=self.volume_mean, scale=self.volume_sd))
+                    self.map[i][j] = volume
+                    self.resource_points.append(ResourcePoint(i, j, volume))
+
+    def update_map(self, shiftx, shifty):
+        self.map = shift(self.map, (shiftx, shifty), cval=np.NaN)
 
     def __str__(self):
-        return(
-            "Location: ({}, {})\n".format(self.loc[0], self.loc[1]) +
-            "Time: {}".format(self.time)
-        )
+        string = "({}, {}) - {}".format(self.x, self.y, self.volume)
+        return string
 
-# Generate arrivals
-inter_arrivals = [0] * pop_size
-arrival_locations = [0] * pop_size
-for i in range(pop_size):
-    inter_arrivals[i] = -(1/lambda_a) * np.log(1 - random.uniform(0, 1))
-    arrival_locations[i] = random.uniform(0, 1)
 
-arrivals = [None] * pop_size
+# Arrivals --------------------------------------------------------------------
 
-arrivals[0] = Arrival(
-    (arrival_locations[0], 0),
-    inter_arrivals[0]
-)
+# Main loop -------------------------------------------------------------------
 
-for i in range(1, pop_size):    
-    arrivals[i] = Arrival(
-        loc = (arrival_locations[i], 0),
-        time = inter_arrivals[i] + arrivals[i-1].time
-    )
-
-# Generate enviroment resources
-resources = [None] * resource_size
-for i in range(resource_size):
-    resources[i] = Resource(
-        loc = (random.uniform(0, 1), random.uniform(0, 1)),
-        fullness = 100
-    )
-
-# Main sim loop
-for i in range(pop_size):
-    arrival = arrivals[i]
-    print(arrival)
