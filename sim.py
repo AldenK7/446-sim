@@ -78,15 +78,15 @@ class SeaMap:
 
         plt.show()
 
-    def animate_map(self):
+    def animate_map(self, speed):
         fig = plt.figure()
         plot = plt.imshow(self.map_history[0])
 
         def update(i):
-            plot.set_data(self.map_history[i])
+            plot.set_data(self.map_history[i * speed])
             return [plot]
 
-        anim = FuncAnimation(fig, update, interval=1, frames=len(self.map_history), blit=True)
+        anim = FuncAnimation(fig, update, interval=1, frames=len(self.map_history) // speed, blit=True)
         plt.show()
 
 
@@ -154,13 +154,13 @@ class Sim:
     ARRIVAL_RATE = (2.4216 / (36000 / 129)) # From our input modelling
 
     def __init__(self, nest_location, grid_shape, resource_frequency, 
-                 volume_mean, volume_sd, total_days, animate=False):
+                 volume_mean, total_days, animate=False):
         # Parameters for map
         self.nest_location = nest_location
         self.grid_shape = grid_shape
         self.resource_frequency = resource_frequency
         self.volume_mean = volume_mean
-        self.volume_sd = volume_sd
+        self.volume_sd = 0.1 * volume_mean
         self.total_days = total_days
 
         self.seamap = SeaMap(
@@ -170,6 +170,22 @@ class Sim:
             volume_sd = self.volume_sd,
             nest = self.nest_location,
             save_map = animate,
+        )
+
+        self.clock = 0
+        self.event_list = []
+        self.event_count = 0
+
+        self.stats = Stats()
+
+    def reset(self):
+        self.seamap = SeaMap(
+            shape = self.grid_shape, 
+            frequency = self.resource_frequency,
+            volume_mean = self.volume_mean,
+            volume_sd = self.volume_sd,
+            nest = self.nest_location,
+            save_map = self.seamap.save_map,
         )
 
         self.clock = 0
@@ -246,12 +262,13 @@ class Sim:
             volumes[i] = self.seamap.map[coords[i][0]][coords[i][1]]
 
         # Normalize and combine to create rating
-        if coords.shape[0] != 1:
-            distances = 1 - ((distances-np.min(distances))/(np.max(distances)-np.min(distances))) 
-            volumes = (volumes-np.min(volumes))/(np.max(volumes)-np.min(volumes)) 
+        if np.max(distances) == np.min(distances):
+            # Nothing to normalize, just make array of 1
+            distances = np.ones(distances.shape[0]) 
+            volumes = np.array(volumes.shape[0])
         else:
-            distances = np.array([1]) 
-            volumes = np.array([1])
+            distances = 1 - ((distances-np.min(distances)) / (np.max(distances)-np.min(distances))) 
+            volumes = (volumes-np.min(volumes)) / (np.max(volumes)-np.min(volumes)) 
 
         ratings = (distances + volumes) / 2
         sort_ind = np.argsort(ratings)[::-1]
@@ -301,7 +318,7 @@ class Sim:
             if cur_event.type == Event.ARRIVAL:
                 self.process_arrival(cur_event)
             else:
-                print("Day", self.clock // self.DAY, "...")
+                # print("Day", self.clock // self.DAY, "...")
                 self.process_map_shift(cur_event)
         
         self.stats.consumptions = np.array(self.stats.consumptions)
@@ -310,25 +327,157 @@ class Sim:
 
 
 
+
 # Sim Runs --------------------------------------------------------------------
 
+tests = [
+    # Baseline
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5,
+        volume_mean=100,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"baseline"
+    },
 
-random.seed(1)
+    # 75% volume
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5,
+        volume_mean=100 * 0.75,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"75volume"
+    },
 
-sim = Sim(
-    nest_location=(0,0),
-    grid_shape=(10,10),
-    resource_frequency=0.3,
-    volume_mean=100,
-    volume_sd=1,
-    total_days=90,
-)
+    # 50% volume
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5,
+        volume_mean=100 * 0.50,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"50volume"
+    },
 
-sim.run()
+    # 25% volume
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5,
+        volume_mean=100 * 0.25,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"25volume"
+    },
 
-print(np.mean(sim.stats.consumptions))
-print(len(sim.stats.consumptions))
-print(len(sim.stats.low_consumption))
+    # 75% frequency
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5 * 0.75,
+        volume_mean=100,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"75frequency"
+    },
 
+    # 50% frequency
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5 * 0.50,
+        volume_mean=100,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"50frequency"
+    },
 
-# sim.seamap.animate_map()
+    # 25% frequency
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5 * 0.25,
+        volume_mean=100,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"25frequency"
+    },
+
+    # 75% volume and frequency
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5 * 0.75,
+        volume_mean=100 * 0.75,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"75vol75freq"
+    },
+
+    # 50% volume and frequency
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5 * 0.50,
+        volume_mean=100 * 0.50,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"50vol50freq"
+    },
+
+    # 25% volume and frequency
+    {"sim": Sim(
+        nest_location=(0,0),
+        grid_shape=(10,10),
+        resource_frequency=0.5 * 0.25,
+        volume_mean=100 * 0.25,
+        total_days=90,
+        animate=True
+    ),
+    "dir":"25vol25freq"
+    },
+]
+
+for test in tests:
+    sim = test["sim"]
+    dir = test["dir"]
+
+    print("----", dir, "----")
+
+    for i in range(1, 6):
+        seed = i
+        random.seed(seed)
+
+        print("Run:", seed)
+        sim.reset()
+        sim.run()
+
+        print(np.mean(sim.stats.consumptions))
+        print(np.mean(sim.stats.distances))
+        print(len(sim.stats.low_consumption) / len(sim.stats.consumptions))
+
+        seed_arr = np.full(sim.stats.consumptions.shape, seed)
+
+        combined_stats = np.dstack((sim.stats.consumptions_t, sim.stats.consumptions, sim.stats.distances, sim.stats.volumes, seed_arr))[0, :, :]
+        print(combined_stats.shape)
+
+        np.savetxt(
+            "sim-data/"+dir+"/"+str(seed)+".csv", combined_stats, delimiter=",", 
+            header="time,consumption,distance,volume,seed", comments=''
+        )
+
+# sim.seamap.animate_map(speed=10)
